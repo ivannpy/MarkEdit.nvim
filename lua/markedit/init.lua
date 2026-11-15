@@ -158,6 +158,9 @@ function M.show_status()
         lines[#lines + 1] = ("  [%d] %s"):format(bufnr, path)
     end
     lines[#lines + 1] = ("connected viewers: %d"):format(#s.clients)
+    if s.running and #s.clients == 0 then
+        lines[#lines + 1] = "  none yet: see :MarkEditLog for a `loaded` or `error` message from the extension"
+    end
     for _, c in ipairs(s.clients) do
         lines[#lines + 1] = ("  #%d %s (origin %s)"):format(c.id, c.path, c.origin)
     end
