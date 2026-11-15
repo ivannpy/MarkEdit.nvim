@@ -1,0 +1,102 @@
+*markedit.txt*  Follow a Markdown file in MarkEdit from Neovim
+
+==============================================================================
+CONTENTS                                                     *markedit-contents*
+
+  1. Introduction ............................................ |markedit|
+  2. Commands ................................................ |markedit-commands|
+  3. Configuration ........................................... |markedit-config|
+  4. Lua API ................................................. |markedit-api|
+  5. Troubleshooting ......................................... |markedit-troubleshooting|
+
+==============================================================================
+1. INTRODUCTION                                                       *markedit*
+
+Requires Neovim 0.11 or newer.
+
+markedit.nvim opens the current Markdown buffer in MarkEdit, writes your edits
+to disk as you type and sends the cursor position to the MarkEdit-nvim
+extension, which moves MarkEdit's cursor (and so its preview) to the same line.
+
+A small HTTP server listens on a loopback address and pushes Server-Sent
+Events to the extension. It only accepts connections that look like they come
+from the extension. See docs/protocol.md in the repository for the details.
+
+==============================================================================
+2. COMMANDS                                                   *markedit-commands*
+
+                                                                 *:MarkEditOpen*
+:MarkEditOpen       Open the current buffer in MarkEdit and follow it. The
+                    buffer is written first if it has unsaved changes.
+
+                                                                *:MarkEditClose*
+:MarkEditClose      Stop following the current buffer. The server stops when
+                    the last buffer is released.
+
+                                                               *:MarkEditToggle*
+:MarkEditToggle     Run |:MarkEditOpen| or |:MarkEditClose|.
+
+                                                               *:MarkEditStatus*
+:MarkEditStatus     Show the server address, followed buffers and the viewers
+                    that are connected.
+
+                                                                  *:MarkEditLog*
+:MarkEditLog        Show the plugin log in a scratch buffer, including the
+                    diagnostics reported by the extension.
+
+==============================================================================
+3. CONFIGURATION                                                *markedit-config*
+
+Call `require("markedit").setup({...})`. Options and defaults: >lua
+
+    {
+      app = "MarkEdit",
+      background = true,
+      host = "127.0.0.1",
+      port = 47821,
+      token = nil,
+      allowed_origins = {},
+      filetypes = { "markdown" },
+      sync = { cursor = true, debounce = 40 },
+      autosave = {
+        enabled = true,
+        events = { "InsertLeave", "TextChanged" },
+        debounce = 300,
+      },
+      notify = true,
+      open = nil,
+    }
+<
+app             macOS application that shows the file.
+background      Open it without taking focus from the terminal (`open -g`).
+host, port      Address of the bridge. The extension must use the same.
+token           Optional shared secret, the extension needs the same value.
+allowed_origins Web origins (http/https) allowed to connect. Normally empty.
+filetypes       Filetypes that can be opened in the viewer.
+sync.cursor     Send the cursor position.
+sync.debounce   Milliseconds to wait for the cursor to settle.
+autosave        Write tracked buffers automatically.
+notify          Show messages with |vim.notify()|.
+open            `function(path)` that replaces how the viewer is launched.
+
+==============================================================================
+4. LUA API                                                         *markedit-api*
+
+`require("markedit").setup({opts})`   Configure the plugin.
+`require("markedit").open()`          Same as |:MarkEditOpen|.
+`require("markedit").close()`         Same as |:MarkEditClose|.
+`require("markedit").toggle()`        Same as |:MarkEditToggle|.
+`require("markedit").status()`        Table with `running`, `port`, `tracked`
+                                      and `clients`.
+
+==============================================================================
+5. TROUBLESHOOTING                                      *markedit-troubleshooting*
+
+- |:MarkEditStatus| shows `connected viewers: 0`: the extension is not loaded
+  or cannot reach the port. Restart MarkEdit after installing it.
+- "could not start the bridge": the port is in use, probably by another
+  Neovim. Close it or change `port` here and in the extension settings.
+- "forbidden origin" in |:MarkEditLog|: MarkEdit reports an http(s) origin.
+  Add the printed value to `allowed_origins`.
+
+ vim:tw=78:ts=8:ft=help:norl:
