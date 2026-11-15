@@ -47,10 +47,11 @@ The client reports diagnostics. The body is a JSON object (any `Content-Type`;
 `text/plain` avoids a CORS preflight). `204` on success, `400` if the body is
 not a JSON object. The server only logs it (`:MarkEditLog`).
 
-Message types sent by the extension 0.1:
+Message types sent by the extension 0.1 (they need the server to be up when the script runs, so open the file with `:MarkEditOpen` first):
 
 | `type` | Fields | Meaning |
 | --- | --- | --- |
+| `loaded` | `hasEventSource`, `hasFetch`, `hasModule`, `hasRequire` | The script ran inside MarkEdit. Sent before anything else, so Neovim can tell "the extension never loaded" apart from "it loaded but could not connect". |
 | `ready` | `path`, `server`, `lines`, `locked`, `origin` | The handshake finished. `origin` is the page origin the webview reports. |
 | `error` | `path`, `where`, `message` | Something failed inside the extension. |
 | `debug` | `path`, `message`, ... | Only when the extension setting `debug` is true. |
@@ -127,8 +128,9 @@ machine. It enforces:
    `localhost:<port>` or `[::1]:<port>`. This stops DNS rebinding.
 3. **`Origin` check.** Requests whose `Origin` starts with `http://` or
    `https://` are rejected unless listed in `allowed_origins`. Web pages always
-   send such an origin; the extension, running inside an app webview, does not.
-   Missing origins, `null` and custom schemes are accepted.
+   send such an origin. The default list is `["http://localhost"]`, the origin
+   MarkEdit's webview reports for its `POST` requests (its event-stream `GET`
+   carries no `Origin`). Missing origins, `null` and custom schemes are accepted.
 4. **Optional token.** When `token` is set, `?token=` (or the
    `X-MarkEdit-Token` header) must match.
 

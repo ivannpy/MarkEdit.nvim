@@ -55,7 +55,7 @@ Call `require("markedit").setup({...})`. Options and defaults: >lua
       host = "127.0.0.1",
       port = 47821,
       token = nil,
-      allowed_origins = {},
+      allowed_origins = { "http://localhost" },
       filetypes = { "markdown" },
       sync = { cursor = true, debounce = 40 },
       autosave = {
@@ -71,7 +71,9 @@ app             macOS application that shows the file.
 background      Open it without taking focus from the terminal (`open -g`).
 host, port      Address of the bridge. The extension must use the same.
 token           Optional shared secret, the extension needs the same value.
-allowed_origins Web origins (http/https) allowed to connect. Normally empty.
+allowed_origins Web origins (http/https) allowed to connect. Defaults to
+                `{ "http://localhost" }`, the origin MarkEdit's webview
+                reports. Setting it replaces the list.
 filetypes       Filetypes that can be opened in the viewer.
 sync.cursor     Send the cursor position.
 sync.debounce   Milliseconds to wait for the cursor to settle.
@@ -96,7 +98,8 @@ open            `function(path)` that replaces how the viewer is launched.
   or cannot reach the port. Restart MarkEdit after installing it.
 - "could not start the bridge": the port is in use, probably by another
   Neovim. Close it or change `port` here and in the extension settings.
-- "forbidden origin" in |:MarkEditLog|: MarkEdit reports an http(s) origin.
-  Add the printed value to `allowed_origins`.
+- "rejected request from origin" in |:MarkEditLog|: the sender reports an
+  http(s) origin that is not allowed. Add the printed value to
+  `allowed_origins` (it replaces the default list).
 
  vim:tw=78:ts=8:ft=help:norl:

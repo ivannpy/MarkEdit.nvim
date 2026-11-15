@@ -75,10 +75,27 @@ return {
         h.eq(h.get(port, "/", { Origin = "markedit://editor" }).status, 200)
     end),
 
-    case("allowed_origins lets a chosen web origin in", function()
+    case("the origin reported by MarkEdit's webview is accepted by default", function()
+        fresh()
+        local _, port = open_doc()
+        h.eq(h.get(port, "/", { Origin = "http://localhost" }).status, 200)
+        local res = h.post(port, "/client", vim.json.encode({ type = "loaded" }), { Origin = "http://localhost" })
+        h.eq(res.status, 204)
+    end),
+
+    case("only that exact localhost origin is allowed, not other ports or hosts", function()
+        fresh()
+        local _, port = open_doc()
+        h.eq(h.get(port, "/", { Origin = "http://localhost:8080" }).status, 403)
+        h.eq(h.get(port, "/", { Origin = "http://127.0.0.1" }).status, 403)
+        h.eq(h.get(port, "/", { Origin = "http://evil.localhost" }).status, 403)
+    end),
+
+    case("allowed_origins replaces the default list", function()
         fresh({ allowed_origins = { "http://localhost:3000" } })
         local _, port = open_doc()
         h.eq(h.get(port, "/", { Origin = "http://localhost:3000" }).status, 200)
+        h.eq(h.get(port, "/", { Origin = "http://localhost" }).status, 403)
     end),
 
     case("a token is required when configured", function()

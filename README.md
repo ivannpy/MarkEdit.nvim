@@ -96,8 +96,9 @@ require("markedit").setup({
   port = 47821,
   -- optional shared secret, the extension needs the same `token`
   token = nil,
-  -- web origins (http/https) allowed to connect, normally none
-  allowed_origins = {},
+  -- web origins (http/https) allowed to connect. The default is the origin
+  -- MarkEdit's webview reports. Setting it replaces the list.
+  allowed_origins = { "http://localhost" },
   filetypes = { "markdown" },
   sync = {
     cursor = true,
@@ -130,6 +131,8 @@ require("markedit").setup({
 
 The server accepts connections only from the loopback address and refuses
 requests that look like they come from a web page or a DNS-rebinding attack.
+The one `http` origin it lets in by default is exactly `http://localhost`, which
+is what MarkEdit's webview reports (observed with MarkEdit 1.37.1).
 It never sends the text of your document, only paths, cursor positions and
 "saved" notices. See the [protocol notes](docs/protocol.md#security). For an
 extra layer, set the same `token` here and in the extension.
@@ -139,11 +142,13 @@ extra layer, set the same `token` here and in the extension.
 - `:MarkEditStatus` shows whether a viewer is connected. If it says `connected
   viewers: 0`, the extension is not loaded or cannot reach the port.
 - `:MarkEditLog` shows each connection with the origin MarkEdit reports, and
-  every `ready`/`error` message sent by the extension.
+  every `loaded`, `ready` and `error` message sent by the extension. If there is
+  no `loaded` line, MarkEdit did not run the extension at all.
 - *"could not start the bridge"*: the port is taken, probably by another
   Neovim running the bridge. Close it or change `port` (in the extension too).
-- Requests rejected with *forbidden origin* mean MarkEdit's webview reports an
-  `http(s)` origin. Add it to `allowed_origins`; the log prints the exact value.
+- *rejected request from origin ...* in the log: the sender reports an `http(s)`
+  origin that is not allowed. If it is your viewer, add the exact value to
+  `allowed_origins` (remember it replaces the default list).
 
 ## What is verified
 

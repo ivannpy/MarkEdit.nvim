@@ -14,8 +14,10 @@ M.defaults = {
     -- Optional shared secret. When set, clients must send `?token=<token>`.
     token = nil,
     -- Origins with an http(s) scheme that may connect. Requests coming from
-    -- web pages are rejected by default (DNS rebinding / drive-by protection).
-    allowed_origins = {},
+    -- web pages are rejected (drive-by protection). The default is the origin
+    -- MarkEdit's webview reports. Setting this replaces the list, so keep
+    -- "http://localhost" in it if you add others.
+    allowed_origins = { "http://localhost" },
     -- Filetypes that can be opened in the viewer.
     filetypes = { "markdown" },
     -- Send the cursor position so the viewer follows what you are editing.
