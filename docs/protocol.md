@@ -68,14 +68,18 @@ be ignored, so the protocol can grow without breaking old clients.
 | Event | Data | When |
 | --- | --- | --- |
 | `hello` | `{ protocol, server, version }` | Right after the stream opens. A client that does not speak `protocol` should disconnect. |
-| `open` | `{ path }` | Neovim is following this document. Sent when the client connects to a document that is already followed, and when `:MarkEditOpen` is run for a document the client was already connected for. |
-| `cursor` | see below | The cursor or scroll position changed (debounced), or right after `open`. |
+| `follow` | `{ path }` | Neovim is following this document. Sent when the client connects to a document that is already followed, and when `:MarkEditOpen` is run for a document the client was already connected for. |
+| `cursor` | see below | The cursor or scroll position changed (debounced), or right after `follow`. |
 | `saved` | `{ path, tick }` | The buffer was written to disk. |
 | `close` | `{ path }` | Neovim stopped following this document. |
 | `bye` | `{}` | Neovim is quitting. |
 
+The event is called `follow` and not `open` on purpose: `EventSource` fires its
+own built-in `open` event when the connection is established, and a server event
+with that name would be confused with it.
+
 `hello` only identifies the server. A client must **not** treat it as "Neovim
-follows this document": that is what `open` means. This matters when the user
+follows this document": that is what `follow` means. This matters when the user
 opens an unrelated file in MarkEdit while the server is running for another one.
 
 ### `cursor`
@@ -106,7 +110,7 @@ opens an unrelated file in MarkEdit while the server is running for another one.
 client                                   server (Neovim)
   | GET /events?path=...  ------------------> |
   | <------------------------------ hello      |
-  | <------------------------------ open       |  (only if Neovim follows `path`)
+  | <------------------------------ follow     |  (only if Neovim follows `path`)
   | <------------------------------ cursor     |
   | ...                                        |
   | <------------------------------ cursor     |  (on every move)

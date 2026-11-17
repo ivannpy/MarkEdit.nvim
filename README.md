@@ -21,7 +21,8 @@ Neovim (this plugin)  ── events over HTTP/SSE on 127.0.0.1 ──▶  MarkEd
 ```
 
 1. `:MarkEditOpen` starts a small server on `127.0.0.1`, remembers the buffer and
-   runs `open -g -a MarkEdit <file>`.
+   runs `open -a MarkEdit <file>` (MarkEdit comes to the front; set
+   `background = true` to keep the focus in the terminal).
 2. The extension, loaded by MarkEdit in that window, connects to the server and
    asks for events about its file.
 3. When you move the cursor, the plugin sends the line and column. The extension
@@ -89,8 +90,8 @@ These are the defaults:
 require("markedit").setup({
   -- macOS application that shows the file
   app = "MarkEdit",
-  -- open it without taking focus from the terminal (`open -g`)
-  background = true,
+  -- open it in the background, keeping the focus in the terminal (`open -g`)
+  background = false,
   -- bridge server. The extension must use the same host and port
   host = "127.0.0.1",
   port = 47821,

@@ -4,8 +4,9 @@ local M = {}
 M.defaults = {
     -- Name of the macOS application that is opened to view the file.
     app = "MarkEdit",
-    -- Open the viewer without taking focus away from the terminal (`open -g`).
-    background = true,
+    -- Open the viewer in the background, without taking focus away from the
+    -- terminal (`open -g`). By default MarkEdit comes to the front.
+    background = false,
     -- Address of the local bridge server. Only loopback addresses make sense.
     host = "127.0.0.1",
     -- TCP port of the bridge server. 0 lets the OS pick a free port (the

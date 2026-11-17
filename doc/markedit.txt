@@ -51,7 +51,7 @@ Call `require("markedit").setup({...})`. Options and defaults: >lua
 
     {
       app = "MarkEdit",
-      background = true,
+      background = false,
       host = "127.0.0.1",
       port = 47821,
       token = nil,
@@ -68,7 +68,9 @@ Call `require("markedit").setup({...})`. Options and defaults: >lua
     }
 <
 app             macOS application that shows the file.
-background      Open it without taking focus from the terminal (`open -g`).
+background      Open it in the background without taking focus from the
+                terminal (`open -g`). Default is false: MarkEdit comes to
+                the front.
 host, port      Address of the bridge. The extension must use the same.
 token           Optional shared secret, the extension needs the same value.
 allowed_origins Web origins (http/https) allowed to connect. Defaults to

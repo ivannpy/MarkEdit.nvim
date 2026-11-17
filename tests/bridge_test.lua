@@ -128,7 +128,7 @@ return {
         local hello = h.next_event(stream, "hello")
         h.eq(hello.protocol, 1)
         h.eq(stream.status, 200)
-        h.eq(h.next_event(stream, "open").path, vim.uv.fs_realpath(path))
+        h.eq(h.next_event(stream, "follow").path, vim.uv.fs_realpath(path))
         local cursor = h.next_event(stream, "cursor")
         h.eq(cursor.line, 3)
         h.eq(cursor.col, 2)
@@ -151,12 +151,12 @@ return {
         h.next_event(stream, "hello")
         vim.wait(100)
         for _, event in ipairs(stream.events) do
-            h.truthy(event.name ~= "open", "an untracked file must not be locked")
+            h.truthy(event.name ~= "follow", "an untracked file must not be locked")
         end
         vim.cmd("edit " .. vim.fn.fnameescape(path))
         vim.bo.filetype = "markdown"
         markedit.open()
-        h.eq(h.next_event(stream, "open").path, vim.uv.fs_realpath(path))
+        h.eq(h.next_event(stream, "follow").path, vim.uv.fs_realpath(path))
         stream.close()
     end),
 

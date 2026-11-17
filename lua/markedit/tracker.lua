@@ -71,7 +71,7 @@ end
 function M.send_to(client)
     for bufnr, path in pairs(tracked) do
         if path == client.path then
-            server.send(client, "open", { path = path })
+            server.send(client, "follow", { path = path })
             local payload = M.cursor_payload(bufnr)
             if payload then
                 server.send(client, "cursor", payload)
@@ -106,7 +106,7 @@ function M.attach(bufnr)
     tracked[bufnr] = path
     log.add("tracker", ("tracking buffer %d (%s)"):format(bufnr, path))
     -- Viewers that were already connected for this file start following now.
-    server.broadcast(path, "open", { path = path })
+    server.broadcast(path, "follow", { path = path })
     return path
 end
 

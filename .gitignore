@@ -1,2 +1,4 @@
 .DS_Store
 doc/tags
+# local development notes, not versioned
+ROADMAP.md
