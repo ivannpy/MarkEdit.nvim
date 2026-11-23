@@ -130,6 +130,18 @@ function M.is_tracked(bufnr)
     return tracked[bufnr] ~= nil
 end
 
+--- Whether some tracked buffer shows this file. Safe to call from libuv callbacks.
+---@param path string  real path
+---@return boolean
+function M.is_tracked_path(path)
+    for _, tracked_path in pairs(tracked) do
+        if tracked_path == path then
+            return true
+        end
+    end
+    return false
+end
+
 ---@return integer
 function M.count()
     return vim.tbl_count(tracked)

@@ -124,7 +124,10 @@ end
 ---@param tbl table
 ---@return string
 function M.json_response(status, tbl)
-    return M.response(status, { ["Content-Type"] = "application/json" }, vim.json.encode(tbl))
+    return M.response(status, {
+        ["Content-Type"] = "application/json",
+        ["Cache-Control"] = "no-store",
+    }, vim.json.encode(tbl))
 end
 
 --- Response head that opens a Server-Sent Events stream.

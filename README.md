@@ -4,12 +4,12 @@ Edit Markdown in Neovim and watch it rendered in [MarkEdit](https://github.com/M
 
 `markedit.nvim` opens the current file in MarkEdit, writes your changes to disk
 as you type and tells MarkEdit where your cursor is. Together with the
-[MarkEdit-nvim](../MarkEdit-nvim) extension, MarkEdit becomes a live, read-only
+[MarkEdit-nvim](https://github.com/ivannpy/MarkEdit-nvim) extension, MarkEdit becomes a live, read-only
 viewer for what you edit in Neovim.
 
-> **Status: experimental (0.1.0).** The plugin and the extension are tested
-> against each other with a simulated MarkEdit. They have not been run against
-> the real application yet, see [What is verified](#what-is-verified).
+> **Status: experimental (0.1.0).** The basic flow works with the real MarkEdit
+> (1.37.1). The rest is tested only with a simulated MarkEdit, see
+> [What is verified](#what-is-verified).
 
 ## How it works
 
@@ -20,7 +20,8 @@ Neovim (this plugin)  ── events over HTTP/SSE on 127.0.0.1 ──▶  MarkEd
   - sends cursor / saved                                           - keeps the document read-only
 ```
 
-1. `:MarkEditOpen` starts a small server on `127.0.0.1`, remembers the buffer and
+1. `:MarkEditOpen` starts a small server on `127.0.0.1` (each Neovim has its own,
+   on the first free port of a small range), remembers the buffer and
    runs `open -a MarkEdit <file>` (MarkEdit comes to the front; set
    `background = true` to keep the focus in the terminal).
 2. The extension, loaded by MarkEdit in that window, connects to the server and
@@ -39,19 +40,21 @@ The protocol is documented in [docs/protocol.md](docs/protocol.md).
 - macOS with [MarkEdit](https://github.com/MarkEdit-app/MarkEdit) for the viewer.
   The bridge itself is plain Lua and runs anywhere, other platforms only need
   the `open` option to launch a different viewer.
-- The [MarkEdit-nvim](../MarkEdit-nvim) extension installed in MarkEdit.
+- The [MarkEdit-nvim](https://github.com/ivannpy/MarkEdit-nvim) extension installed in MarkEdit.
 - Optional but recommended:
   [MarkEdit-preview](https://github.com/MarkEdit-app/MarkEdit-preview) for the
   rendered view.
 
 ## Installation
 
+It takes two pieces: this plugin in Neovim and the
+[MarkEdit-nvim](https://github.com/ivannpy/MarkEdit-nvim#installation) extension in MarkEdit.
+
 With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "markedit.nvim", -- replace with "<user>/markedit.nvim" once it is published
-  -- while developing locally: dir = "~/Developer/markedit.nvim",
+  "ivannpy/MarkEdit.nvim",
   ft = "markdown",
   cmd = { "MarkEditOpen", "MarkEditClose", "MarkEditToggle", "MarkEditStatus", "MarkEditLog" },
   opts = {},
@@ -64,7 +67,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 ### Try it without touching your configuration
 
 ```sh
-nvim -c "set rtp+=$HOME/Developer/markedit.nvim | runtime plugin/markedit.lua" notes.md
+git clone https://github.com/ivannpy/MarkEdit.nvim ~/markedit.nvim
+nvim -c "set rtp+=$HOME/markedit.nvim | runtime plugin/markedit.lua" notes.md
 ```
 
 then run `:MarkEditOpen`. (It has to be `-c`, not `--cmd`: plugin managers such as
@@ -92,9 +96,12 @@ require("markedit").setup({
   app = "MarkEdit",
   -- open it in the background, keeping the focus in the terminal (`open -g`)
   background = false,
-  -- bridge server. The extension must use the same host and port
+  -- bridge server. The extension must use the same host, port and port count
   host = "127.0.0.1",
   port = 47821,
+  -- ports to try, starting at `port`: each Neovim takes the first free one.
+  -- 1 allows a single Neovim at a time
+  port_count = 10,
   -- optional shared secret, the extension needs the same `token`
   token = nil,
   -- web origins (http/https) allowed to connect. The default is the origin
@@ -145,26 +152,37 @@ extra layer, set the same `token` here and in the extension.
 - `:MarkEditLog` shows each connection with the origin MarkEdit reports, and
   every `loaded`, `ready` and `error` message sent by the extension. If there is
   no `loaded` line, MarkEdit did not run the extension at all.
-- *"could not start the bridge"*: the port is taken, probably by another
-  Neovim running the bridge. Close it or change `port` (in the extension too).
+- *"could not start the bridge"*: every port of the range is taken. Close some
+  Neovim, or change `port` or `port_count` (and `port` / `portCount` in the
+  extension).
+- The second Neovim opens the file but MarkEdit does not follow it: the installed
+  extension is 0.1.0 and only knows the first port.
+  [Update it](https://github.com/ivannpy/MarkEdit-nvim#installation) and restart MarkEdit.
 - *rejected request from origin ...* in the log: the sender reports an `http(s)`
   origin that is not allowed. If it is your viewer, add the exact value to
   `allowed_origins` (remember it replaces the default list).
 
 ## What is verified
 
-- 33 tests in this repository cover the HTTP parsing, the security checks,
-  routing by file, autosave and every event.
-- `MarkEdit-nvim` runs an end-to-end test against a real headless Neovim using
+- 43 tests in this repository cover the HTTP parsing, the security checks,
+  routing by file, several Neovims at once, autosave and every event.
+- [MarkEdit-nvim](https://github.com/ivannpy/MarkEdit-nvim) runs an end-to-end test against a real headless Neovim using
   this plugin, with a simulated MarkEdit.
 
-Not verified yet against the real application:
+Checked by hand with MarkEdit 1.37.1, with a build shortly before 0.1.0:
 
-1. That MarkEdit's webview can open the event stream (its CSP, its origin).
-2. That MarkEdit reloads a file changed on disk by itself.
-3. That moving the editor selection from the extension scrolls
-   MarkEdit-preview (read from its source, not run).
-4. That making the editor read-only does not interfere with the extension API.
+- `:MarkEditOpen` opens the file, and the extension loads and connects.
+- The document is read-only while Neovim follows it.
+- The editor cursor follows Neovim, and MarkEdit-preview scrolls along.
+- MarkEdit reloads the saved file by itself.
+
+Not checked yet against the real application:
+
+1. That a save does not mark the document as *Edited*.
+2. The preview in both modes, side-by-side and overlay.
+3. That the document unlocks after `:MarkEditClose`, quitting or killing Neovim.
+4. Two files at once, in separate windows or in tabs.
+5. That the extension finds the right one of several Neovims.
 
 ## Tests
 
@@ -178,10 +196,11 @@ nvim --headless -u NONE -l tests/run.lua
 
 - Send the buffer text so changes show before they are saved.
 - Scroll the preview from `top`/`bottom` instead of only the cursor line.
-- Several Neovim instances at once (a port per instance, discovered by the
-  extension).
 - Events from MarkEdit to Neovim (jump to a line by clicking).
+
+Bugs and ideas: [plugin issues](https://github.com/ivannpy/MarkEdit.nvim/issues),
+[extension issues](https://github.com/ivannpy/MarkEdit-nvim/issues).
 
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -153,7 +153,20 @@ local function route(sock, req)
         return finish(sock, http.json_response(401, { error = "invalid token" }))
     end
 
-    if req.method == "GET" and (req.path == "/" or req.path == "/hello") then
+    if req.method == "GET" and req.path == "/tracks" then
+        -- Lets the extension find which of several Neovims follows its file.
+        local path = req.query.path
+        if not path or path == "" then
+            return finish(sock, http.json_response(400, { error = "missing `path` query parameter" }))
+        end
+        local is_tracked = S.handlers.is_tracked
+        return finish(sock, http.json_response(200, {
+            server = meta.name,
+            version = meta.version,
+            protocol = meta.protocol,
+            tracked = is_tracked ~= nil and is_tracked(normalize(path)) or false,
+        }))
+    elseif req.method == "GET" and (req.path == "/" or req.path == "/hello") then
         return finish(sock, http.json_response(200, {
             server = meta.name,
             version = meta.version,
@@ -226,8 +239,37 @@ local function on_connection(err)
     end)
 end
 
----@param opts { host: string, port: integer, token?: string, allowed_origins?: string[] }
----@param handlers { on_connect?: fun(client: markedit.Client), on_disconnect?: fun(client: markedit.Client), on_client_message?: fun(msg: table, origin?: string) }
+--- Listens on one port. libuv may report a busy port in `bind` or in `listen`.
+---@return userdata? tcp
+---@return string? err
+---@return string? code  libuv error name, e.g. "EADDRINUSE"
+local function listen(host, port)
+    local tcp = uv.new_tcp()
+    local ok, err, code = tcp:bind(host, port)
+    if ok then
+        ok, err, code = tcp:listen(128, on_connection)
+    end
+    if not ok then
+        close_handle(tcp)
+        return nil, err or "could not listen", code
+    end
+    return tcp
+end
+
+--- Last port of the range a configuration allows.
+---@param port integer
+---@param count? integer
+---@return integer
+function M.last_port(port, count)
+    if port == 0 then
+        return 0
+    end
+    return math.max(port, math.min(port + (count or 1) - 1, 65535))
+end
+
+--- Starts the server on the first free port of the range.
+---@param opts { host: string, port: integer, port_count?: integer, token?: string, allowed_origins?: string[] }
+---@param handlers { on_connect?: fun(client: markedit.Client), on_disconnect?: fun(client: markedit.Client), on_client_message?: fun(msg: table, origin?: string), is_tracked?: fun(path: string): boolean }
 ---@return boolean ok
 ---@return integer|string result  the port on success, an error message otherwise
 function M.start(opts, handlers)
@@ -235,20 +277,20 @@ function M.start(opts, handlers)
         return true, S.port
     end
 
-    local tcp = uv.new_tcp()
-    local bound, berr = tcp:bind(opts.host, opts.port)
-    if not bound then
-        close_handle(tcp)
-        return false, berr or "could not bind"
+    local tcp, err, code
+    for port = opts.port, M.last_port(opts.port, opts.port_count) do
+        tcp, err, code = listen(opts.host, port)
+        -- Only a busy port is worth trying the next one.
+        if tcp or code ~= "EADDRINUSE" then
+            break
+        end
+        log.add("server", ("port %d is busy"):format(port))
     end
-    S.tcp = tcp
-    local listening, lerr = tcp:listen(128, on_connection)
-    if not listening then
-        S.tcp = nil
-        close_handle(tcp)
-        return false, lerr or "could not listen"
+    if not tcp then
+        return false, err
     end
 
+    S.tcp = tcp
     S.port = tcp:getsockname().port
     S.opts = opts
     S.handlers = handlers or {}
