@@ -10,7 +10,8 @@ The canonical copy of this document lives in the `markedit.nvim` repository.
 
 ## Transport
 
-- Default address: `http://127.0.0.1:47821`.
+- Default address: `http://127.0.0.1:47821`, or the first free port of the range
+  `47821`-`47830` when several Neovims are open, see [Discovery](#discovery).
 - The server only binds to the configured `host` (loopback by default).
 - All responses carry permissive CORS headers. Access control is not done by
   the browser but by the server, see [Security](#security).
@@ -23,6 +24,16 @@ Returns a JSON description of the server. Useful to check that it is running.
 
 ```json
 { "server": "markedit.nvim", "version": "0.1.0", "protocol": 1 }
+```
+
+### `GET /tracks`
+
+Tells whether this Neovim follows a document. Used for [discovery](#discovery).
+Takes the same query as `/events` and resolves symlinks like it; `400` is
+returned when `path` is missing.
+
+```json
+{ "server": "markedit.nvim", "version": "0.1.0", "protocol": 1, "tracked": true }
 ```
 
 ### `GET /events`
@@ -55,6 +66,9 @@ Message types sent by the extension 0.1 (they need the server to be up when the 
 | `ready` | `path`, `server`, `lines`, `locked`, `origin` | The handshake finished. `origin` is the page origin the webview reports. |
 | `error` | `path`, `where`, `message` | Something failed inside the extension. |
 | `debug` | `path`, `message`, ... | Only when the extension setting `debug` is true. |
+
+Until it has chosen a server, the extension sends its reports (such as `loaded`)
+to every port of the range.
 
 ### `OPTIONS *`
 
@@ -122,6 +136,24 @@ client                                   server (Neovim)
 When the connection drops the client should wait, unlock the document after a
 grace period and reconnect with exponential backoff.
 
+## Discovery
+
+Every Neovim runs its own server, on the first free port of a range the two sides
+agree on (`port` and `port_count` in the plugin, `port` and `portCount` in the
+extension). To find the one that follows its document, a client:
+
+1. Sends `GET /tracks` to every port of the range at the same time. It ignores
+   ports that refuse the connection, do not answer in 500 ms or whose `server` is
+   not `markedit.nvim`.
+2. Connects to `/events` on the first server with `tracked: true`. If there is
+   none, it keeps its current connection, or else uses the first server found, or
+   else the first port of the range.
+3. While it is connected but not following, repeats the search every 5 seconds
+   and when its window gets the focus, and moves to a server that follows the
+   document. It does not search while following.
+
+`hello` from another server must not keep a document locked: only `follow` does.
+
 ## Security
 
 The server is meant to be reachable only by the extension running on the same
@@ -137,6 +169,10 @@ machine. It enforces:
    carries no `Origin`). Missing origins, `null` and custom schemes are accepted.
 4. **Optional token.** When `token` is set, `?token=` (or the
    `X-MarkEdit-Token` header) must match.
+
+Discovery sends the document path and the token (if set) to every port of the
+range, including ports other local programs may be using. Use a `port_count` of 1
+on both sides to contact a single port.
 
 Events carry paths and cursor positions, never the text of the document.
 

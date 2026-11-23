@@ -20,7 +20,8 @@ Neovim (this plugin)  ── events over HTTP/SSE on 127.0.0.1 ──▶  MarkEd
   - sends cursor / saved                                           - keeps the document read-only
 ```
 
-1. `:MarkEditOpen` starts a small server on `127.0.0.1`, remembers the buffer and
+1. `:MarkEditOpen` starts a small server on `127.0.0.1` (each Neovim has its own,
+   on the first free port of a small range), remembers the buffer and
    runs `open -a MarkEdit <file>` (MarkEdit comes to the front; set
    `background = true` to keep the focus in the terminal).
 2. The extension, loaded by MarkEdit in that window, connects to the server and
@@ -92,9 +93,12 @@ require("markedit").setup({
   app = "MarkEdit",
   -- open it in the background, keeping the focus in the terminal (`open -g`)
   background = false,
-  -- bridge server. The extension must use the same host and port
+  -- bridge server. The extension must use the same host, port and port count
   host = "127.0.0.1",
   port = 47821,
+  -- ports to try, starting at `port`: each Neovim takes the first free one.
+  -- 1 allows a single Neovim at a time
+  port_count = 10,
   -- optional shared secret, the extension needs the same `token`
   token = nil,
   -- web origins (http/https) allowed to connect. The default is the origin
@@ -145,16 +149,19 @@ extra layer, set the same `token` here and in the extension.
 - `:MarkEditLog` shows each connection with the origin MarkEdit reports, and
   every `loaded`, `ready` and `error` message sent by the extension. If there is
   no `loaded` line, MarkEdit did not run the extension at all.
-- *"could not start the bridge"*: the port is taken, probably by another
-  Neovim running the bridge. Close it or change `port` (in the extension too).
+- *"could not start the bridge"*: every port of the range is taken. Close some
+  Neovim, or change `port` or `port_count` (and `port` / `portCount` in the
+  extension).
+- The second Neovim opens the file but MarkEdit does not follow it: the installed
+  extension is older and only knows the first port. Update it and restart MarkEdit.
 - *rejected request from origin ...* in the log: the sender reports an `http(s)`
   origin that is not allowed. If it is your viewer, add the exact value to
   `allowed_origins` (remember it replaces the default list).
 
 ## What is verified
 
-- 33 tests in this repository cover the HTTP parsing, the security checks,
-  routing by file, autosave and every event.
+- 43 tests in this repository cover the HTTP parsing, the security checks,
+  routing by file, several Neovims at once, autosave and every event.
 - `MarkEdit-nvim` runs an end-to-end test against a real headless Neovim using
   this plugin, with a simulated MarkEdit.
 
@@ -165,6 +172,7 @@ Not verified yet against the real application:
 3. That moving the editor selection from the extension scrolls
    MarkEdit-preview (read from its source, not run).
 4. That making the editor read-only does not interfere with the extension API.
+5. That the extension finds the right one of several Neovims.
 
 ## Tests
 
@@ -178,8 +186,6 @@ nvim --headless -u NONE -l tests/run.lua
 
 - Send the buffer text so changes show before they are saved.
 - Scroll the preview from `top`/`bottom` instead of only the cursor line.
-- Several Neovim instances at once (a port per instance, discovered by the
-  extension).
 - Events from MarkEdit to Neovim (jump to a line by clicking).
 
 ## License

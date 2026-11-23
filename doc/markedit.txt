@@ -54,6 +54,7 @@ Call `require("markedit").setup({...})`. Options and defaults: >lua
       background = false,
       host = "127.0.0.1",
       port = 47821,
+      port_count = 10,
       token = nil,
       allowed_origins = { "http://localhost" },
       filetypes = { "markdown" },
@@ -72,6 +73,9 @@ background      Open it in the background without taking focus from the
                 terminal (`open -g`). Default is false: MarkEdit comes to
                 the front.
 host, port      Address of the bridge. The extension must use the same.
+port_count      How many ports to try, starting at `port`. Each Neovim takes
+                the first free one, so several can be open at once. The
+                extension needs the same `portCount`. 1 means only `port`.
 token           Optional shared secret, the extension needs the same value.
 allowed_origins Web origins (http/https) allowed to connect. Defaults to
                 `{ "http://localhost" }`, the origin MarkEdit's webview
@@ -98,8 +102,10 @@ open            `function(path)` that replaces how the viewer is launched.
 
 - |:MarkEditStatus| shows `connected viewers: 0`: the extension is not loaded
   or cannot reach the port. Restart MarkEdit after installing it.
-- "could not start the bridge": the port is in use, probably by another
-  Neovim. Close it or change `port` here and in the extension settings.
+- "could not start the bridge": every port of the range is in use. Close some
+  Neovim, or change `port` or `port_count` here and in the extension settings.
+- MarkEdit does not follow the second Neovim: update the extension, an older
+  one only knows the first port.
 - "rejected request from origin" in |:MarkEditLog|: the sender reports an
   http(s) origin that is not allowed. Add the printed value to
   `allowed_origins` (it replaces the default list).
