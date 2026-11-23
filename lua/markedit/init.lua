@@ -62,6 +62,7 @@ local handlers = {
         tracker.send_to(client)
     end,
     on_disconnect = function() end,
+    is_tracked = tracker.is_tracked_path,
     on_client_message = function(msg, origin)
         log.add("client", vim.json.encode(msg) .. (origin and (" origin=" .. origin) or ""))
     end,
@@ -72,14 +73,17 @@ local function start_server()
     local ok, result = server.start({
         host = o.host,
         port = o.port,
+        port_count = o.port_count,
         token = o.token,
         allowed_origins = o.allowed_origins,
     }, handlers)
     if not ok then
+        local last = server.last_port(o.port, o.port_count)
+        local ports = last > o.port and ("%d-%d"):format(o.port, last) or tostring(o.port)
         notify(
-            ("could not start the bridge on %s:%d (%s). Another Neovim may already be using that port, change `port`."):format(
+            ("could not start the bridge on %s:%s (%s). If every port is taken, change `port` or raise `port_count`."):format(
                 o.host,
-                o.port,
+                ports,
                 tostring(result)
             ),
             vim.log.levels.ERROR

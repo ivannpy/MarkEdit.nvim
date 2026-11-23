@@ -32,6 +32,44 @@ local function open_doc(lines)
     return path, server.port()
 end
 
+--- Takes a port with a plain listener, like another program would.
+local function hold_port()
+    local holder = vim.uv.new_tcp()
+    holder:bind("127.0.0.1", 0)
+    holder:listen(1, function() end)
+    return holder, holder:getsockname().port
+end
+
+--- Runs a second, real Neovim that opens its own document.
+local function spawn_nvim(port, port_count)
+    local doc = h.tempfile({ "# other instance" })
+    local port_file = vim.fs.dirname(doc) .. "/port"
+    local root = vim.fs.dirname(vim.fs.dirname(vim.api.nvim_get_runtime_file("lua/markedit/init.lua", false)[1]))
+    root = vim.fs.dirname(root)
+    local script = vim.fs.dirname(doc) .. "/start.lua"
+    vim.fn.writefile({
+        ("vim.opt.rtp:prepend(%q)"):format(root),
+        ("require('markedit').setup({ port = %d, port_count = %d, notify = false, open = function() end })"):format(port, port_count),
+        ("vim.cmd('edit ' .. vim.fn.fnameescape(%q))"):format(doc),
+        "vim.bo.filetype = 'markdown'",
+        "require('markedit').open()",
+        ("vim.fn.writefile({ tostring(require('markedit').status().port) }, %q)"):format(port_file),
+    }, script)
+    local proc = vim.system({ vim.v.progpath, "--headless", "-u", "NONE", "-c", "luafile " .. script })
+    h.wait(function()
+        local line = vim.fn.filereadable(port_file) == 1 and vim.fn.readfile(port_file)[1]
+        return line and line ~= ""
+    end, "the other Neovim to start", 5000)
+    return {
+        doc = doc,
+        port = tonumber(vim.fn.readfile(port_file)[1]),
+        stop = function()
+            proc:kill("sigkill")
+            proc:wait(2000)
+        end,
+    }
+end
+
 local function case(name, fn)
     return { name = name, fn = fn }
 end
@@ -298,16 +336,97 @@ return {
     case("starting on a busy port reports an error", function()
         fresh()
         -- hold a port with a plain listener, then try to serve on it
-        local holder = vim.uv.new_tcp()
-        holder:bind("127.0.0.1", 0)
-        holder:listen(1, function() end)
-        local busy = holder:getsockname().port
-
+        local holder, busy = hold_port()
         local ok, err = server.start({ host = "127.0.0.1", port = busy }, {})
         holder:close()
         h.eq(ok, false)
         h.truthy(err and err ~= "", "an error message is returned")
         h.truthy(not server.is_running())
+    end),
+
+    case("a busy port moves on to the next one of the range", function()
+        fresh()
+        local holder, busy = hold_port()
+        local ok, port = server.start({ host = "127.0.0.1", port = busy, port_count = 10 }, {})
+        holder:close()
+        h.eq(ok, true)
+        h.truthy(port > busy and port < busy + 10, "expected a port of the range, got " .. tostring(port))
+        h.eq(h.get(port, "/").status, 200)
+    end),
+
+    case("open() works while another Neovim holds the configured port", function()
+        local holder, busy = hold_port()
+        fresh({ port = busy, port_count = 10 })
+        local path = open_doc()
+        holder:close()
+        h.eq(opened, vim.uv.fs_realpath(path))
+        h.truthy(server.port() ~= busy)
+    end),
+
+    case("errors other than a busy port are not retried", function()
+        fresh()
+        -- TEST-NET address: not one of this machine, so binding fails at once
+        local ok, err = server.start({ host = "192.0.2.1", port = 47999, port_count = 10 }, {})
+        h.eq(ok, false)
+        h.truthy(err:find("EADDRNOTAVAIL", 1, true), err)
+        for _, line in ipairs(log.lines()) do
+            h.truthy(not line:find("busy", 1, true), line)
+        end
+    end),
+
+    case("two separate Neovims each follow their own file", function()
+        local first = spawn_nvim(0, 1)
+        local port = first.port
+        local second = spawn_nvim(port, 10)
+        h.truthy(second.port ~= port, "each has its own port")
+
+        local function tracked(on, path)
+            return vim.json.decode(h.get(on, "/tracks?path=" .. vim.uri_encode(path)).body).tracked
+        end
+        h.eq(tracked(first.port, first.doc), true)
+        h.eq(tracked(first.port, second.doc), false)
+        h.eq(tracked(second.port, second.doc), true)
+        h.eq(tracked(second.port, first.doc), false)
+
+        first.stop()
+        second.stop()
+    end),
+
+    case("two buffers of one Neovim share the server", function()
+        fresh()
+        local a, port = open_doc({ "a" })
+        local b, again = open_doc({ "b" })
+        h.eq(again, port)
+        local sa = h.stream(port, "/events?path=" .. vim.uri_encode(a))
+        local sb = h.stream(port, "/events?path=" .. vim.uri_encode(b))
+        h.eq(h.next_event(sa, "follow").path, vim.uv.fs_realpath(a))
+        h.eq(h.next_event(sb, "follow").path, vim.uv.fs_realpath(b))
+        sa.close()
+        sb.close()
+    end),
+
+    case("/tracks tells whether a file is followed", function()
+        fresh()
+        local path, port = open_doc()
+        local res = h.get(port, "/tracks?path=" .. vim.uri_encode(path))
+        h.eq(res.status, 200)
+        h.eq(res.headers["cache-control"], "no-store")
+        local body = vim.json.decode(res.body)
+        h.eq(body.server, "markedit.nvim")
+        h.eq(body.protocol, 1)
+        h.eq(body.tracked, true)
+        h.eq(vim.json.decode(h.get(port, "/tracks?path=/does/not/../exist.md").body).tracked, false)
+        h.eq(h.get(port, "/tracks").status, 400)
+    end),
+
+    case("/tracks resolves symlinks and needs the token", function()
+        fresh({ token = "s3cret" })
+        local path, port = open_doc()
+        local link = vim.fn.tempname() .. ".md"
+        vim.uv.fs_symlink(path, link)
+        local target = "/tracks?path=" .. vim.uri_encode(link)
+        h.eq(h.get(port, target).status, 401)
+        h.eq(vim.json.decode(h.get(port, target .. "&token=s3cret").body).tracked, true)
     end),
 
     case("starting twice keeps the same server", function()

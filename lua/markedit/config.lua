@@ -9,9 +9,13 @@ M.defaults = {
     background = false,
     -- Address of the local bridge server. Only loopback addresses make sense.
     host = "127.0.0.1",
-    -- TCP port of the bridge server. 0 lets the OS pick a free port (the
+    -- First TCP port of the bridge server. 0 lets the OS pick a free port (the
     -- MarkEdit extension then cannot find it, use it only for tests).
     port = 47821,
+    -- How many consecutive ports to try, starting at `port`. Each Neovim takes
+    -- the first free one, so several can be open at once. The extension looks
+    -- through the same range (`portCount`). 1 means only `port`.
+    port_count = 10,
     -- Optional shared secret. When set, clients must send `?token=<token>`.
     token = nil,
     -- Origins with an http(s) scheme that may connect. Requests coming from
